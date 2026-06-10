@@ -1,96 +1,139 @@
 import time
-from src.led_controller import trigger_update
+import board
+import neopixel
 import tkinter as tk
-from rpi_ws281x import PixelStrip, Color
 
-timeToWait = 5 # adjust this for testing speed, in seconds
+# ---------------- LED SETTINGS ----------------
 
-# LED SETTINGS 
+FIRST_PIN = board.D18
+SECOND_PIN = board.D21
 
-LED_COUNT = 60
-LED_PIN = 18          # GPIO18, physical pin 12
-LED_BRIGHTNESS = 204  # around 80%
+ICS_PER_STRIP = 6
 
-strip = PixelStrip(LED_COUNT, LED_PIN, brightness=LED_BRIGHTNESS)
-strip.begin()
+FIRST_STRIPS = 50
+SECOND_STRIPS = 20
 
-TEAM_A_COLOUR = Color(0, 255, 0)      # green
-TEAM_B_COLOUR = Color(128, 0, 255)    # purple
+FIRST_PIXELS = FIRST_STRIPS * ICS_PER_STRIP      # 300
+SECOND_PIXELS = SECOND_STRIPS * ICS_PER_STRIP    # 120
 
-def set_strip_colour(colour):
-    for i in range(LED_COUNT):
-        strip.setPixelColor(i, colour)
-    strip.show()
+BRIGHTNESS = 0.3
 
-def clear_strip():
-    for i in range(LED_COUNT):
-        strip.setPixelColor(i, Color(0, 0, 0))
-    strip.show()
-
-# SCORE POPUP SCREEN 
-
-root = tk.Tk()
-root.title("Live Score")
-root.geometry("400x200")
-
-score_label = tk.Label(
-    root,
-    text="Waiting for score...",
-    font=("Arial", 28),
-    padx=20,
-    pady=20
+first_gpio = neopixel.NeoPixel(
+    FIRST_PIN,
+    FIRST_PIXELS,
+    brightness=BRIGHTNESS,
+    auto_write=False,
+    pixel_order=neopixel.GRB
 )
 
-score_label.pack(expand=True)
+second_gpio = neopixel.NeoPixel(
+    SECOND_PIN,
+    SECOND_PIXELS,
+    brightness=BRIGHTNESS,
+    auto_write=False,
+    pixel_order=neopixel.GRB
+)
+
+# ---------------- LED SECTIONS ----------------
+
+section_a_first = [2, 9, 10, 11, 12, 13, 14, 15, 16, 19, 48, 49, 50]
+section_a_second = []
+
+section_b_first = [1, 3, 4, 6, 7, 8, 17, 18, 20, 21, 47]
+section_b_second = [1, 10, 11, 12, 14, 15, 16, 20]
+
+section_c_first = [
+    5, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+    31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+    41, 42, 43, 44, 45, 46
+]
+
+section_c_second = [2, 3, 4, 5, 6, 7, 8, 9, 17, 18, 19]
+
+# ---------------- COLOURS ----------------
+
+RED = (255, 0, 0)
+WHITE = (255, 255, 255)
+OFF = (0, 0, 0)
+
+# ---------------- LED FUNCTIONS ----------------
+
+def set_one_strip(strip_object, strip_number, colour):
+    start_ic = (strip_number - 1) * ICS_PER_STRIP
+
+    for ic in range(start_ic, start_ic + ICS_PER_STRIP):
+        strip_object[ic] = colour
 
 
-def update_score_screen(scoring_team, score_a, score_b):
-    score_text = (
-        f"{scoring_team['team']} scored!\n\n"
-        f"{TEAM_A['tricode']} {score_a} - {TEAM_B['tricode']} {score_b}"
+def set_section(strip_object, strip_numbers, colour):
+    for strip_number in strip_numbers:
+        set_one_strip(strip_object, strip_number, colour)
+
+
+def clear_all_leds():
+    first_gpio.fill(OFF)
+    second_gpio.fill(OFF)
+    first_gpio.show()
+    second_gpio.show()
+
+
+def show_canada_flag_leds():
+    first_gpio.fill(OFF)
+    second_gpio.fill(OFF)
+
+    # Canada flag: red, white, red
+    set_section(first_gpio, section_a_first, RED)
+    set_section(second_gpio, section_a_second, RED)
+
+    set_section(first_gpio, section_b_first, WHITE)
+    set_section(second_gpio, section_b_second, WHITE)
+
+    set_section(first_gpio, section_c_first, RED)
+    set_section(second_gpio, section_c_second, RED)
+
+    first_gpio.show()
+    second_gpio.show()
+
+# ---------------- SCREEN FUNCTIONS ----------------
+
+def show_canada_screen():
+    root = tk.Tk()
+    root.title("Country Display")
+
+    # Fullscreen
+    root.attributes("-fullscreen", True)
+
+    # Red background
+    root.configure(bg="red")
+
+    label = tk.Label(
+        root,
+        text="CANADA",
+        font=("Arial", 90, "bold"),
+        fg="white",
+        bg="red"
     )
 
-    score_label.config(text=score_text)
-    root.update()
+    label.pack(expand=True)
 
-# TEAM LABELS
-TEAM_A = {"team": "Boston Celtics", "tricode": "BOS"}
-TEAM_B = {"team": "Los Angeles Lakers", "tricode": "LAL"}
+    # Press ESC to exit
+    root.bind("<Escape>", lambda event: close_program(root))
 
-score_a = 0
-score_b = 0
-turn = 0
+    root.mainloop()
 
-print("LED Test  simulating live game, Ctrl+C to stop\n")
 
-# MAIN 
+def close_program(root):
+    clear_all_leds()
+    root.destroy()
 
-while True:
-    if turn % 2 == 0:
-        score_a += 2
-        update = {
-            "team": TEAM_A["team"],
-            "tricode": TEAM_A["tricode"],
-            "score": score_a,
-            "points_scored": 2,
-        }
-        scoring_team = TEAM_A
-        set_strip_colour(TEAM_A_COLOUR)
+# ---------------- MAIN PROGRAM ----------------
 
-    else:
-        score_b += 2
-        update = {
-            "team": TEAM_B["team"],
-            "tricode": TEAM_B["tricode"],
-            "score": score_b,
-            "points_scored": 2,
-        }
-        scoring_team = TEAM_B
-        set_strip_colour(TEAM_B_COLOUR)
+try:
+    show_canada_flag_leds()
+    print("Canada flag LEDs are on.")
 
-    trigger_update(update)
-    print(f"  Score: {TEAM_A['tricode']} {score_a} — {TEAM_B['tricode']} {score_b}\n")
-    update_score_screen(scoring_team, score_a, score_b)
+    show_canada_screen()
 
-    turn += 1
-    time.sleep(timeToWait) 
+except KeyboardInterrupt:
+    clear_all_leds()
+    print("LEDs off.")
